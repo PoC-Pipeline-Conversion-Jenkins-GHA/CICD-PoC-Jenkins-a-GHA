@@ -1,4 +1,4 @@
-name: copy
+name: CI JAVA
 on:
   workflow_call:
     inputs:
@@ -27,7 +27,7 @@ on:
         type: string
         required: false
         default: |
-          {"projectStream":"master","projectModule":"","repositoryInstance":"bitbucket"}
+          {"projectStream":"master","projectModule":"","repositoryInstance":"Github"}
       build_json:
         type: string
         required: false
