@@ -1,6 +1,6 @@
 name: copy
 on:
-  workflow_call:
+  workflow_dispatch:
     inputs:
       workflow:
         type: string
