@@ -1,6 +1,10 @@
 name: CI JAVA
 on:
   workflow_call:
+    secrets:
+      SONAR_TOKEN:
+        description: 'Token de SonarCloud para el análisis'
+        required: true
     inputs:
       workflow:
         type: string
