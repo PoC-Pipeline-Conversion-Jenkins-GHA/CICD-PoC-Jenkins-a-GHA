@@ -98,6 +98,12 @@ jobs:
       - name: 1. Checkout del código
         uses: actions/checkout@v4
         with:
+          # Esta es la línea clave: le dice a 'checkout' qué repo clonar.
+          # github.repository es SIEMPRE el repo que inició el workflow (el middleware).
+          repository: ${{ github.repository }}
+          
+          # Esta línea le dice qué commit/rama clonar.
+          ref: ${{ github.sha }}
           # Necesario para que SonarCloud analice correctamente el historial de PRs
           # '0' significa clonar todo el historial.
           fetch-depth: 0  
@@ -121,11 +127,6 @@ jobs:
         # SonarCloud necesita los archivos .class (compilados) y los reportes
         # de cobertura de pruebas (generados por 'verify') para un buen análisis.
         run: mvn -B verify --file pom.xml
-
-      - name: 5. (DEBUG) Encontrar carpetas de binarios (.class)
-        run: |
-          echo "Buscando todas las carpetas 'classes' en el workspace..."
-          find . -type d -name "classes"
 
       - name: 5. Ejecutar Scan de SonarCloud
         uses: SonarSource/sonarcloud-github-action@master
