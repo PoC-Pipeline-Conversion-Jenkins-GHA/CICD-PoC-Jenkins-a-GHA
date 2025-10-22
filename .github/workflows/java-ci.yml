@@ -134,4 +134,4 @@ jobs:
           # projectBaseDir: . 
           args: >
             -Dsonar.organization=PoC-Pipeline-Conversion-Jenkins-GHA
-            -Dsonar.projectKey=Middleware-Java-PoC-Jenkins-a-GHA
+            -Dsonar.projectKey=CICD-PoC-Jenkins-a-GHA
