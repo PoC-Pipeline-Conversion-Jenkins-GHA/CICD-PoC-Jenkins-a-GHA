@@ -116,23 +116,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
-      - name: 4. Construir y Probar con Maven
-        # Este paso es CRÍTICO.
-        # SonarCloud necesita los archivos .class (compilados) y los reportes
-        # de cobertura de pruebas (generados por 'verify') para un buen análisis.
-        run: mvn -B verify --file pom.xml
-
-      - name: 5. Ejecutar Scan de SonarCloud
-        uses: SonarSource/sonarcloud-github-action@master
+      - name: 4. Build, Test and Analyze with SonarCloud
+        # Este único comando reemplaza a 'mvn verify' Y a la acción de Sonar
+        # Pasa los tokens como variables de entorno
         env:
-          # Token de GitHub (integrado) para decorar el Pull Request
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  
-          # Token de SonarCloud (que creamos en el Paso 2)
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          # (Opcional) Si tu pom.xml no está en la raíz
-          # projectBaseDir: . 
-          args: >
-            -Dsonar.organization=poc-pipeline-conversion-jenkins-gha
-            -Dsonar.projectKey=PoC-Pipeline-Conversion-Jenkins-GHA_Middleware-Java-PoC-Jenkins-a-GHA
-            -Dsonar.java.binaries=target/classes
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Para la decoración de PRs
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}    # Para la autenticación
+        run: |
+          mvn -B verify sonar:sonar \
+            -Dsonar.organization=poc-pipeline-conversion-jenkins-gha \
+            -Dsonar.projectKey=PoC-Pipeline-Conversion-Jenkins-a-GHA_Middleware-Java-PoC-Jenkins-a-GHA
