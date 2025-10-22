@@ -59,8 +59,14 @@ on:
         default: ""
 
 jobs:
-  run-copy:
+  pipeline-ci-java:
     runs-on: ubuntu-latest
+    # Permisos necesarios para firmar (ej. con Sigstore) y
+    # publicar en el registro de GitHub (GHCR)
+    permissions:
+      contents: read
+      packages: write # Para 'docker push' a GHCR
+      id-token: write # Para autenticación 'keyless' de Sigstore/cosign
     env:
       # escala simple
       WORKFLOW: ${{ inputs.workflow }}
@@ -89,38 +95,43 @@ jobs:
       POST_BUILD_DEPLOY_ENV: ${{ inputs.postBuildDeployEnv }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: 1. Checkout del código
+        uses: actions/checkout@v4
+        with:
+          # Necesario para que SonarCloud analice correctamente el historial de PRs
+          # '0' significa clonar todo el historial.
+          fetch-depth: 0  
 
-      - name: Mostrar parámetros parseados
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          echo "Workflow: $WORKFLOW"
-          echo "Release: $RELEASE_ID, Project: $PROJECT_ID, Region: $REGION, CSILD: $CSILD"
-          echo "Source => stream=$SOURCE_PROJECT_STREAM module=$SOURCE_PROJECT_MODULE repo=$SOURCE_REPO_INSTANCE"
-          echo "Build => verbose=$BUILD_VERBOSE deployLibs=$BUILD_DEPLOY_LIBS pom=$BUILD_POM toArchive=$BUILD_DEPLOY_TO_ARCHIVE"
-          echo "Thresholds => UT%=$THRESH_UT_SUCCESS SEC=$THRESH_SEC TD=$THRESH_TD REL=$THRESH_REL COV=$THRESH_COV"
-          echo "PostBuildDeployEnv=$POST_BUILD_DEPLOY_ENV"
+      - name: 2. Configurar JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          
+      - name: 3. (Opcional) Configurar Caché de Maven
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
 
-      - name: (Ejemplo) Resolver dependencias
-        if: ${{ fromJSON(inputs.build_json).dependencyResolutionRepo != '' }}
-        run: |
-          echo "Usando repo de dependencias: ${{ fromJSON(inputs.build_json).dependencyResolutionRepo }}"
-          # aquí irían tus comandos de build (maven/gradle/npm, etc.)
+      - name: 4. Construir y Probar con Maven
+        # Este paso es CRÍTICO.
+        # SonarCloud necesita los archivos .class (compilados) y los reportes
+        # de cobertura de pruebas (generados por 'verify') para un buen análisis.
+        run: mvn -B verify --file pom.xml
 
-      - name: (Ejemplo) Análisis SonarQube (si aplica)
-        if: ${{ fromJSON(inputs.staticCodeAnalysis_json).sonarQube.sonarLanguage != '' }}
-        run: |
-          echo "Ejecutando SonarQube con lenguaje=${{ fromJSON(inputs.staticCodeAnalysis_json).sonarQube.sonarLanguage }}"
-          echo "Excluye=${{ fromJSON(inputs.staticCodeAnalysis_json).sonarQube.sonarExcludes }}"
-          # sonar-scanner ... (parámetros reales aquí)
-
-      - name: (Ejemplo) Deploy a SWSDEVTEST
-        if: ${{ fromJSON(inputs.deploy_json).SWSDEVTEST.rlmExecute == true }}
-        run: |
-          echo "Desplegando a SWSDEVTEST"
-          echo "Env=${{ fromJSON(inputs.deploy_json).SWSDEVTEST.rlmEnvironment }}"
-          echo "Params=${{ fromJSON(inputs.deploy_json).SWSDEVTEST.rlmParams }}"
-          echo "UIParams=${{ fromJSON(inputs.deploy_json).SWSDEVTEST.rlmUIParams }}"
-          echo "Template=${{ fromJSON(inputs.deploy_json).SWSDEVTEST.rlmTemplate }}"
-          # comandos reales de despliegue aquí
+      - name: 5. Ejecutar Scan de SonarCloud
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          # Token de GitHub (integrado) para decorar el Pull Request
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  
+          # Token de SonarCloud (que creamos en el Paso 2)
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          # (Opcional) Si tu pom.xml no está en la raíz
+          # projectBaseDir: . 
+          args: >
+            -Dsonar.organization=tu-organizacion-en-sonar
+            -Dsonar.projectKey=tu-proyecto-en-sonar
