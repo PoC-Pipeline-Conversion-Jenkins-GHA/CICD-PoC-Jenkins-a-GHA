@@ -135,3 +135,4 @@ jobs:
           args: >
             -Dsonar.organization=poc-pipeline-conversion-jenkins-gha
             -Dsonar.projectKey=PoC-Pipeline-Conversion-Jenkins-GHA_Middleware-Java-PoC-Jenkins-a-GHA
+            -Dsonar.java.binaries=target/classes
