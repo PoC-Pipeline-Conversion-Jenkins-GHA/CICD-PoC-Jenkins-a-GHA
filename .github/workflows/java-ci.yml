@@ -95,18 +95,40 @@ jobs:
       POST_BUILD_DEPLOY_ENV: ${{ inputs.postBuildDeployEnv }}
 
     steps:
-      - name: 1. Checkout del código
+      - name: 1. (DEPURACIÓN) Mostrar contexto inicial
+        run: |
+          echo "--- Contexto del Workflow ---"
+          echo "Repositorio (github.repository): ${{ github.repository }}"
+          echo "SHA (github.sha): ${{ github.sha }}"
+          echo "Workspace (github.workspace): ${{ github.workspace }}"
+          echo "---------------------------------"
+          echo "Listando archivos ANTES del checkout (debe estar vacío):"
+          ls -la
+
+      - name: 2. Checkout del código (del repo que llama)
         uses: actions/checkout@v4
         with:
-          # Esta es la línea clave: le dice a 'checkout' qué repo clonar.
-          # github.repository es SIEMPRE el repo que inició el workflow (el middleware).
+          # ESTA ES LA LÍNEA MÁS IMPORTANTE
+          # Le dice al checkout que baje el código del "Middleware"
+          # y no el del "CI/CD".
           repository: ${{ github.repository }}
           
-          # Esta línea le dice qué commit/rama clonar.
+          # Le dice qué commit exacto bajar
           ref: ${{ github.sha }}
-          # Necesario para que SonarCloud analice correctamente el historial de PRs
-          # '0' significa clonar todo el historial.
-          fetch-depth: 0  
+          
+          # Necesario para SonarCloud
+          fetch-depth: 0 
+      
+      - name: 3. (DEPURACIÓN) Listar archivos DESPUÉS del checkout
+        run: |
+          echo "---------------------------------"
+          echo "Listando archivos en el workspace (debe mostrar el código del MIDDLEWARE):"
+          ls -laR
+          echo "---------------------------------"
+          echo "Buscando 'pom.xml'..."
+          # Esto nos mostrará el pom.xml que Maven usará
+          find . -name "pom.xml"
+          echo "---------------------------------"
 
       - name: 2. Configurar JDK 17
         uses: actions/setup-java@v4
