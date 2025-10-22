@@ -133,5 +133,5 @@ jobs:
           # (Opcional) Si tu pom.xml no está en la raíz
           # projectBaseDir: . 
           args: >
-            -Dsonar.organization=PoC-Pipeline-Conversion-Jenkins-GHA
+            -Dsonar.organization=poc-pipeline-conversion-jenkins-gha
             -Dsonar.projectKey=PoC-Pipeline-Conversion-Jenkins-GHA_Middleware-Java-PoC-Jenkins-a-GHA
