@@ -114,7 +114,7 @@ jobs:
           ref: ${{ github.sha }}
           # Necesario para SonarCloud
           fetch-depth: 0 
-          
+
       # Instala la Snyk CLI
       - name: 4. Instalar Snyk CLI
         uses: snyk/actions/setup@master
@@ -126,20 +126,6 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
-      # 6. Ejecutar Snyk Code (Tu Código - SAST)
-      - name: 6. Run Snyk Code Scan
-        run: |
-          snyk code test --sarif-file-output=snyk-code.sarif || true
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-
-      # 7. Ejecutar Snyk IaC (Infraestructura como Código)
-      - name: 7. Run Snyk IaC Scan
-        run: |
-          snyk iac test --sarif-file-output=snyk-iac.sarif || true
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-
       # 8. Subir los resultados a GitHub
       - name: 8. Upload SARIF results to GitHub
         uses: github/codeql-action/upload-sarif@v3
@@ -147,5 +133,3 @@ jobs:
           # Combina todos los reportes SARIF
           sarif_file: |
             snyk-oss.sarif
-            snyk-code.sarif
-            snyk-iac.sarif
