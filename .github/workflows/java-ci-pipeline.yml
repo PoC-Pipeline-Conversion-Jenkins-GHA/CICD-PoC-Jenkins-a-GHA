@@ -1,0 +1,82 @@
+name: Reusable Java CI Pipeline
+on:
+  workflow_call:
+    # --- Entradas que este pipeline espera ---
+    inputs:
+      java-version:
+        description: 'Version de Java (JDK)'
+        type: string
+        required: false
+        default: '17'
+      # Parámetros específicos de la app
+      sonar-project-key:
+        description: 'La Project Key de SonarCloud'
+        type: string
+        required: true
+      snyk-org-slug:
+        description: 'El "slug" de la organización Snyk'
+        type: string
+        required: true
+
+    # --- Secretos que este pipeline necesita ---
+    # FORZAMOS a que el pipeline "padre" los pase explícitamente.
+    # Esto es mucho más seguro que 'secrets: inherit'.
+    secrets:
+      SONAR_TOKEN:
+        description: 'Token de SonarCloud para el análisis'
+        required: true
+      SNYK_TOKEN:
+        description: 'Token de Snyk para el escaneo'
+        required: true
+
+jobs:
+  build-and-scan:
+    name: Build, Test & Scan
+    runs-on: ubuntu-latest
+    
+    # Permisos que este job necesita para Snyk/Sonar
+    permissions:
+      security-events: write
+      contents: read
+      
+    steps:
+      # 1. Usar nuestra Composite Action para preparar el entorno
+      - name: 1. Setup Environment
+        # Llama a la composite action local
+        uses: ./.github/actions/setup-java-maven/action.yml
+        with:
+          java-version: ${{ inputs.java-version }}
+
+      # 2. Construir y Probar (Build & Test)
+      - name: 2. Build and Test with Maven
+        run: mvn -B clean verify
+
+      # 3. Escanear con SonarCloud (Scan)
+      - name: 3. SonarCloud Scan
+        # Usamos el plugin de Maven, que es más inteligente
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Para decorar el PR
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}    # Autenticación
+        run: |
+          mvn -B sonar:sonar \
+            -Dsonar.organization=${{ inputs.snyk-org-slug }} \
+            -Dsonar.projectKey=${{ inputs.sonar-project-key }}
+
+      # 4. Escanear con Snyk (Scan)
+      - name: 4. Install Snyk CLI
+        uses: snyk/actions/setup@master
+
+      - name: 5. Snyk Open Source (Test & Monitor)
+        continue-on-error: true # No fallar el build, solo reportar
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          snyk test --sarif-file-output=snyk-oss.sarif --org=${{ inputs.snyk-org-slug }} || true
+          snyk monitor --org=${{ inputs.snyk-org-slug }}
+
+      # 5. Subir resultados a GitHub Security
+      - name: 6. Upload SARIF to GitHub Security
+        if: always() # Ejecutar siempre, incluso si Snyk falló
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: snyk-oss.sarif

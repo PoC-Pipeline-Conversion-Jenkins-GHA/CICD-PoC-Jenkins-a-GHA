@@ -1,0 +1,42 @@
+name: 'Setup Java & Maven Environment'
+description: 'Checks out code, sets up JDK, and caches Maven dependencies'
+
+# --- Entradas que esta acción acepta ---
+inputs:
+  java-version:
+    description: 'Version del JDK a instalar'
+    required: false
+    default: '17'
+  repo-token:
+    description: 'Token (GITHUB_TOKEN) para hacer checkout'
+    required: false
+
+runs:
+  using: "composite" # ¡Importante! Define esto como una Composite Action
+  steps:
+    # 1. Checkout del código
+    # Esta acción de checkout es especial: usa el contexto de la
+    # GITHUB_ACTION_PATH para bajar el código del repo "padre"
+    - name: 1. Checkout Application Code
+      uses: actions/checkout@v4
+      with:
+        # Clona el repositorio que LLAMÓ al workflow, no este.
+        repository: ${{ github.repository }}
+        ref: ${{ github.sha }}
+        fetch-depth: 0 # Necesario para SonarCloud
+
+    # 2. Configurar el JDK
+    - name: 2. Setup JDK ${{ inputs.java-version }}
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ inputs.java-version }}
+        distribution: 'temurin'
+
+    # 3. Configurar la caché de Maven
+    - name: 3. Setup Maven Cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.m2/repository
+        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+        restore-keys: |
+          ${{ runner.os }}-maven-

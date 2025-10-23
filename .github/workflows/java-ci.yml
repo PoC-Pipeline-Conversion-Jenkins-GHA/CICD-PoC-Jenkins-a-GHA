@@ -1,6 +1,7 @@
 name: CI JAVA
 on:
   workflow_call:
+  # Secrets necesarios que son invocados desde el repositorio del codigo correspondiente
     secrets:
       SONAR_TOKEN:
         description: 'Token de SonarCloud para el análisis'
@@ -28,7 +29,6 @@ on:
         type: string
         required: false
         default: ""
-
       # Bloques anidados como JSON string
       sourceCode_json:
         type: string
@@ -59,7 +59,6 @@ on:
         default: |
           {"NA":{"rlmExecute":false,"rlmEnvironment":"","rlmParams":"","rlmUIParams":"","rlmTemplate":""},
            "SWSDEVTEST":{"rlmExecute":true,"rlmEnvironment":"","rlmParams":"","rlmUIParams":"","rlmTemplate":""}}
-
       postBuildDeployEnv:
         type: string
         required: false

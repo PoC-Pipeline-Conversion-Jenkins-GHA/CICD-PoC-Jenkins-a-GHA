@@ -1,0 +1,164 @@
+name: Central CI Orchestrator
+
+on:
+  workflow_call:
+    inputs:
+      # Acepta el perfil de la aplicación
+      pipeline_profile:
+        type: string
+        required: true
+      # (Acepta otros parámetros passthrough)
+      sonar-project-key:
+        type: string
+        required: true
+      snyk-org-slug:
+        type: string
+        required: true
+
+    secrets:
+      # Acepta todos los secretos que los hijos puedan necesitar
+      SONAR_TOKEN:
+        required: false
+      SNYK_TOKEN:
+        required: false
+      OPENSHIFT_TOKEN:
+        required: false
+      ARTIFACT_SIGNING_KEY: # Para el 'sign'
+        required: false
+
+jobs:
+  # ===================================================
+  # ETAPA 1: BUILD
+  # ===================================================
+  build:
+    name: "1. Build (${{ inputs.pipeline_profile }})"
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # Para OIDC si es necesario
+      
+    # --- Enrutamiento ---
+    # Llama al pipeline de Java
+    if: |
+      inputs.pipeline_profile == 'java-openshift' ||
+      inputs.pipeline_profile == 'java-middlewares'
+    uses: ./.github/workflows/java-ci-pipeline.yml
+    with:
+      stage: 'build' # ¡Importante! Le dice al hijo qué hacer
+    secrets: inherit # Pasa todos los secretos recibidos
+
+    # Llama al pipeline de .NET
+    if: inputs.pipeline_profile == '.Net'
+    uses: ./.github/workflows/dotnet-ci.yml
+    with:
+      stage: 'build'
+    secrets: inherit
+
+    # Llama al pipeline de Android
+    if: inputs.pipeline_profile == 'Android'
+    uses: ./.github/workflows/android-ci.yml
+    with:
+      stage: 'build'
+    secrets: inherit
+    
+    # ... (Añadir un 'if:' para cada perfil de tu lista) ...
+
+  # ===================================================
+  # ETAPA 2: TEST
+  # ===================================================
+  test:
+    name: "2. Test (${{ inputs.pipeline_profile }})"
+    needs: [build] # <-- Dependencia
+    permissions:
+      contents: read
+      
+    # Llama al pipeline de Java
+    if: |
+      inputs.pipeline_profile == 'java-openshift' ||
+      inputs.pipeline_profile == 'java-middlewares'
+    uses: ./.github/workflows/java-ci-pipeline.yml
+    with:
+      stage: 'test'
+    secrets: inherit # Solo pasa los secretos necesarios
+
+    # ... (Añadir 'if:' para .NET, Android, etc.) ...
+
+  # ===================================================
+  # ETAPA 3: SCAN
+  # ===================================================
+  scan:
+    name: "3. Scan (${{ inputs.pipeline_profile }})"
+    needs: [test] # <-- Dependencia
+    permissions:
+      security-events: write
+      contents: read
+      
+    # Llama al pipeline de Java
+    if: |
+      inputs.pipeline_profile == 'java-openshift' ||
+      inputs.pipeline_profile == 'java-middlewares'
+    uses: ./.github/workflows/java-ci-pipeline.yml
+    with:
+      stage: 'scan'
+      sonar-project-key: ${{ inputs.sonar-project-key }}
+      snyk-org-slug: ${{ inputs.snyk-org-slug }}
+    secrets: # Pasa solo los secretos necesarios para escanear
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      
+    # ... (Añadir 'if:' para .NET, Android, etc.) ...
+    
+    # Perfil especial 'Vendor binary' (binario de proveedor)
+    # Este perfil podría saltarse build/test e ir directo a 'scan'
+    if: inputs.pipeline_profile == 'Vendor binary'
+    uses: ./.github/workflows/binary-scan.yml
+    with:
+      stage: 'scan'
+    secrets: inherit
+
+  # ===================================================
+  # ETAPA 4: SIGN
+  # ===================================================
+  sign:
+    name: "4. Sign Artifact"
+    needs: [scan] # <-- Dependencia
+    permissions:
+      id-token: write # Para firmar con Sigstore/OIDC
+      packages: write
+      
+    # La firma suele ser genérica, por lo que podemos usar un
+    # 'if:' que agrupe a todos los que producen artefactos
+    if: |
+      inputs.pipeline_profile == 'java-openshift' ||
+      inputs.pipeline_profile == 'java-middlewares' ||
+      inputs.pipeline_profile == 'Android' ||
+      inputs.pipeline_profile == '.Net'
+    uses: ./.github/workflows/common-sign.yml
+    secrets:
+      ARTIFACT_SIGNING_KEY: ${{ secrets.ARTIFACT_SIGNING_KEY }}
+
+  # ===================================================
+  # ETAPA 5: DEPLOY
+  # ===================================================
+  deploy:
+    name: "5. Deploy (${{ inputs.pipeline_profile }})"
+    needs: [sign] # <-- Dependencia
+    permissions:
+      id-token: write # Para despliegues OIDC
+      
+    # ¡Aquí el enrutamiento es crucial!
+    
+    if: inputs.pipeline_profile == 'java-openshift'
+    uses: ./.github/workflows/deploy-openshift.yml
+    secrets:
+      OPENSHIFT_TOKEN: ${{ secrets.OPENSHIFT_TOKEN }}
+      
+    if: inputs.pipeline_profile == 'middleware: Nginx'
+    uses: ./.github/workflows/deploy-nginx.yml
+    secrets: inherit # (ej. SSH_KEY)
+      
+    if: inputs.pipeline_profile == 'Kafka'
+    uses: ./.github/workflows/deploy-kafka-config.yml
+    secrets: inherit # (ej. KAFKA_API_KEY)
+      
+    # ... (Añadir un 'if:' para cada perfil de despliegue) ...
