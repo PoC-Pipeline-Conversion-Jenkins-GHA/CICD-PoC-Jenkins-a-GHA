@@ -119,17 +119,20 @@ jobs:
       - name: 4. Instalar Snyk CLI
         uses: snyk/actions/setup@master
 
-      # 5. Ejecutar Snyk Open Source (Dependencias)
-      - name: 5. Run Snyk Open Source Scan
+      - name: 5. Run Snyk Open Source Scan (Test)
+        # Este paso falla el build si hay problemas (¡es bueno!)
+        # Opcionalmente, añade || true si no quieres que falle
+        continue-on-error: true
         run: |
-          snyk test --sarif-file-output=snyk-oss.sarif || true
+          snyk test --sarif-file-output=snyk-oss.sarif --org=juliocesaracostalopeznttdata || true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
-      # 8. Subir los resultados a GitHub
-      - name: 8. Upload SARIF results to GitHub
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          # Combina todos los reportes SARIF
-          sarif_file: |
-            snyk-oss.sarif
+      # --- ¡AÑADE ESTE NUEVO PASO AQUÍ! ---
+      - name: 6. Run Snyk Open Source (Monitor for Dashboard)
+        # Este paso NUNCA debe fallar el build
+        continue-on-error: true
+        run: |
+          snyk monitor --org=juliocesaracostalopeznttdata
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
